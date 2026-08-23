@@ -1,6 +1,6 @@
 'use client'
 import { useCallback,useEffect,useMemo,useState } from 'react'
-import { Bell,Home,LocateFixed,Map,Search,TrendingUp,UsersRound,UserRound } from 'lucide-react'
+import { Bell,Home,LocateFixed,Map as MapIcon,Search,TrendingUp,UsersRound,UserRound } from 'lucide-react'
 import Composer from '@/components/Composer'
 import Feed,{Post} from '@/components/Feed'
 import NearbyMap from '@/components/NearbyMap'
@@ -19,7 +19,7 @@ export default function HomePage(){
  useEffect(()=>{load();const db=supabase;if(!db)return;const ch=db.channel('statusnow-live').on('postgres_changes',{event:'*',schema:'public',table:'posts'},load).on('postgres_changes',{event:'*',schema:'public',table:'status_requests'},load).on('postgres_changes',{event:'*',schema:'public',table:'confirmations'},load).subscribe();return()=>{db.removeChannel(ch)}},[load])
  function gps(){navigator.geolocation?.getCurrentPosition(p=>{setLocation({latitude:p.coords.latitude,longitude:p.coords.longitude});setToast('המיקום שלך פעיל');setTimeout(()=>setToast(''),1500)},()=>{setToast('אפשר להמשיך גם בלי מיקום');setTimeout(()=>setToast(''),1800)})}
  const filtered=useMemo(()=>posts.filter(p=>!query.trim()||p.text.toLowerCase().includes(query.toLowerCase())||(p.location_name||'').toLowerCase().includes(query.toLowerCase())),[posts,query])
- const trends=useMemo(()=>{const m=new Map<string,number>();[...posts.map(p=>p.text),...requests.map(r=>r.question)].forEach(t=>t.split(/\s+/).filter(w=>w.length>3).forEach(w=>m.set(w,(m.get(w)||0)+1)));const learned=[...m.entries()].sort((a,b)=>b[1]-a[1]).slice(0,5).map(([x,count])=>({label:x,count}));const fallback=[{label:'מצב תנועה באיילון',count:120},{label:'גלים בחוף הילטון',count:85},{label:'מלאי בסופר',count:67}];return learned.length>=3?learned:[...learned,...fallback].slice(0,3)},[posts,requests])
+ const trends=useMemo(()=>{const m=new globalThis.Map<string,number>();[...posts.map(p=>p.text),...requests.map(r=>r.question)].forEach(t=>t.split(/\s+/).filter(w=>w.length>3).forEach(w=>m.set(w,(m.get(w)||0)+1)));const learned=[...m.entries()].sort((a,b)=>b[1]-a[1]).slice(0,5).map(([x,count])=>({label:x,count}));const fallback=[{label:'מצב תנועה באיילון',count:120},{label:'גלים בחוף הילטון',count:85},{label:'מלאי בסופר',count:67}];return learned.length>=3?learned:[...learned,...fallback].slice(0,3)},[posts,requests])
  function created(){load();setToast('פורסם בזמן אמת ✓');setTimeout(()=>setToast(''),1800)}
  return <main className="app-shell reference-shell"><div className="reference-page"><header className="reference-header"><div className="reference-logo">Status<span>Now</span></div><div className="reference-tagline">מה קורה עכשיו סביבך?</div></header>
  <div className="reference-composer" onClick={()=>setComposer('status')}><div className="reference-avatar">👤</div><div className="reference-composer-text">מה קורה כאן עכשיו?! <span>💬</span></div></div>
@@ -29,6 +29,6 @@ export default function HomePage(){
  {tab==='groups'&&<div className="empty feature-panel"><UsersRound size={42}/><h2>קבוצות</h2><p>קבוצות מקומיות וציבוריות יופיעו כאן.</p></div>}
  {tab==='map'&&<><div className="reference-page-heading"><div><h2>מפה חיה</h2><p>עדכונים פעילים סביבך</p></div><button onClick={gps}><LocateFixed size={17}/> הפעל GPS</button></div><NearbyMap posts={posts} userLocation={location}/></>}
  </div>
- <nav className="reference-bottom-nav"><button className={tab==='home'?'active':''} onClick={()=>setTab('home')}><Home/><span>ראשי</span></button><button className={tab==='requests'?'active':''} onClick={()=>setTab('requests')}><Bell/><span>בקשות</span></button><button className={tab==='groups'?'active':''} onClick={()=>setTab('groups')}><UsersRound/><span>קבוצות</span></button><button className={tab==='map'?'active':''} onClick={()=>{setTab('map');if(!location)gps()}}><Map/><span>מפה</span></button><button onClick={()=>setProfile(true)}><UserRound/><span>הרשם</span></button></nav>
+ <nav className="reference-bottom-nav"><button className={tab==='home'?'active':''} onClick={()=>setTab('home')}><Home/><span>ראשי</span></button><button className={tab==='requests'?'active':''} onClick={()=>setTab('requests')}><Bell/><span>בקשות</span></button><button className={tab==='groups'?'active':''} onClick={()=>setTab('groups')}><UsersRound/><span>קבוצות</span></button><button className={tab==='map'?'active':''} onClick={()=>{setTab('map');if(!location)gps()}}><MapIcon/><span>מפה</span></button><button onClick={()=>setProfile(true)}><UserRound/><span>הרשם</span></button></nav>
  {composer&&<Composer mode={composer} onClose={()=>setComposer(null)} onCreated={created} userLocation={location}/>} {answerId&&<Composer mode="status" requestId={answerId} onClose={()=>setAnswerId(null)} onCreated={created} userLocation={location}/>} {profile&&<AuthPanel onClose={()=>setProfile(false)}/>} {toast&&<div className="toast">{toast}</div>}</main>
 }
