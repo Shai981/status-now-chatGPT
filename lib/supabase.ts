@@ -1,7 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 
-const url = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
-const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
+const url = 'https://vkdjpoflkycwiskktfwa.supabase.co'
+const key = 'sb_publishable_GWeNymYiYjR-tA7TOXTh_A__PyjmSjl'
 
-export const hasSupabaseEnv = Boolean(url && key)
-export const supabase = hasSupabaseEnv ? createClient(url, key) : null
+export const hasSupabaseEnv = true
+export const supabase = createClient(url, key)
