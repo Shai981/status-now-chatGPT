@@ -1,0 +1,43 @@
+'use client'
+
+import { useEffect, useState } from 'react'
+import { Send, X } from 'lucide-react'
+import { supabase } from '@/lib/supabase'
+
+export type Comment = { id: string; post_id: string; text: string; created_at: string; user_id?: string | null }
+
+export default function Comments({ postId, onClose, onCountChange }: { postId: string; onClose: () => void; onCountChange: () => void }) {
+  const [items, setItems] = useState<Comment[]>([])
+  const [text, setText] = useState('')
+
+  async function load() {
+    if (!supabase) {
+      const all = JSON.parse(localStorage.getItem('status-now-comments') || '[]') as Comment[]
+      setItems(all.filter(x=>x.post_id===postId))
+      return
+    }
+    const { data } = await supabase.from('comments').select('*').eq('post_id', postId).order('created_at', { ascending: true })
+    if (data) setItems(data as Comment[])
+  }
+
+  useEffect(()=>{ load() }, [postId])
+
+  async function add() {
+    if (!text.trim()) return
+    if (!supabase) {
+      const all = JSON.parse(localStorage.getItem('status-now-comments') || '[]') as Comment[]
+      all.push({ id: crypto.randomUUID(), post_id: postId, text: text.trim(), created_at: new Date().toISOString() })
+      localStorage.setItem('status-now-comments', JSON.stringify(all))
+    } else {
+      const { data: auth } = await supabase.auth.getUser()
+      await supabase.from('comments').insert({ post_id: postId, text: text.trim(), user_id: auth.user?.id || null })
+    }
+    setText(''); await load(); onCountChange()
+  }
+
+  return <div className="modal-backdrop" onMouseDown={onClose}><section className="sheet comments-sheet" onMouseDown={e=>e.stopPropagation()}>
+    <div className="sheet-header"><h2>תגובות מהשטח</h2><button className="close-btn" onClick={onClose}><X size={18}/></button></div>
+    <div className="comments-list">{items.length ? items.map(c=><div className="comment" key={c.id}><p>{c.text}</p><span>{new Date(c.created_at).toLocaleTimeString('he-IL',{hour:'2-digit',minute:'2-digit'})}</span></div>) : <p className="helper">אין תגובות עדיין. אפשר להיות הראשון שמוסיף מידע.</p>}</div>
+    <div className="comment-compose"><input value={text} onChange={e=>setText(e.target.value)} onKeyDown={e=>{if(e.key==='Enter') add()}} placeholder="הוסף עדכון קצר..."/><button onClick={add}><Send size={18}/></button></div>
+  </section></div>
+}

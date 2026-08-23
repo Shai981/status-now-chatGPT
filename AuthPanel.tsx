@@ -1,0 +1,54 @@
+'use client'
+
+import { useEffect, useState } from 'react'
+import { LogIn, LogOut, X } from 'lucide-react'
+import { supabase } from '@/lib/supabase'
+
+type Props = { onClose: () => void }
+
+export default function AuthPanel({ onClose }: Props) {
+  const [email, setEmail] = useState('')
+  const [message, setMessage] = useState('')
+  const [userEmail, setUserEmail] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!supabase) return
+    supabase.auth.getUser().then(({ data }) => setUserEmail(data.user?.email || null))
+    const { data } = supabase.auth.onAuthStateChange((_event, session) => setUserEmail(session?.user.email || null))
+    return () => data.subscription.unsubscribe()
+  }, [])
+
+  async function magicLink() {
+    if (!supabase || !email.trim()) return
+    const { error } = await supabase.auth.signInWithOtp({ email: email.trim(), options: { emailRedirectTo: window.location.origin } })
+    setMessage(error ? error.message : 'שלחנו אליך קישור התחברות למייל')
+  }
+
+  async function oauth(provider: 'google' | 'apple') {
+    if (!supabase) return
+    const { error } = await supabase.auth.signInWithOAuth({ provider, options: { redirectTo: window.location.origin } })
+    if (error) setMessage(error.message)
+  }
+
+  async function signOut() {
+    if (!supabase) return
+    await supabase.auth.signOut()
+    setUserEmail(null)
+  }
+
+  return <div className="modal-backdrop" onMouseDown={onClose}>
+    <section className="sheet auth-sheet" onMouseDown={(e)=>e.stopPropagation()}>
+      <div className="sheet-header"><h2>הפרופיל שלי</h2><button className="close-btn" onClick={onClose}><X size={18}/></button></div>
+      {!supabase ? <div className="empty">במצב הדגמה אין צורך בהתחברות. לאחר חיבור Supabase מסך זה יפעל אוטומטית.</div> : userEmail ? <>
+        <div className="profile-box"><strong>מחובר כעת</strong><span>{userEmail}</span></div>
+        <button className="secondary-action full-action" onClick={signOut}><LogOut size={18}/> התנתק</button>
+      </> : <>
+        <p className="helper">התחבר כדי לשמור לייקים, תגובות וסטטוסים תחת החשבון שלך.</p>
+        <div className="field"><label>אימייל</label><input type="email" value={email} onChange={(e)=>setEmail(e.target.value)} placeholder="name@example.com" /></div>
+        <button className="submit" onClick={magicLink}><LogIn size={17}/> שלח קישור התחברות</button>
+        <div className="oauth-grid"><button className="secondary-action" onClick={()=>oauth('google')}>Google</button><button className="secondary-action" onClick={()=>oauth('apple')}>Apple</button></div>
+        {message && <p className="helper">{message}</p>}
+      </>}
+    </section>
+  </div>
+}

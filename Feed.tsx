@@ -1,0 +1,42 @@
+'use client'
+
+import { useState } from 'react'
+import { MessageCircle, Heart, MapPin, Clock, Navigation } from 'lucide-react'
+import { supabase } from '@/lib/supabase'
+import Comments from './Comments'
+
+export type Post = {
+  id: string; kind: 'status' | 'request'; text: string; location_name: string
+  latitude?: number | null; longitude?: number | null; user_id?: string | null
+  media_url?: string | null; media_type?: string | null; created_at: string; expires_at: string
+  likes_count?: number; comments_count?: number
+}
+
+function timeAgo(date: string) { const mins=Math.max(1,Math.floor((Date.now()-new Date(date).getTime())/60000)); return mins<60?`לפני ${mins} דק׳`:`לפני ${Math.floor(mins/60)} שע׳` }
+function expiresIn(date:string){ const mins=Math.max(0,Math.floor((new Date(date).getTime()-Date.now())/60000)); return mins<60?`${mins} דק׳`:`${Math.ceil(mins/60)} שע׳` }
+
+export default function Feed({ posts, onRefresh }: { posts: Post[]; onRefresh?:()=>void }) {
+  const [commentsPost, setCommentsPost] = useState<string|null>(null)
+  const [liked, setLiked] = useState<Record<string,boolean>>({})
+  if (!posts.length) return <div className="empty">עדיין אין עדכונים פעילים. תהיה הראשון לפרסם מה קורה עכשיו.</div>
+
+  async function like(post: Post) {
+    if (liked[post.id]) return
+    if (!supabase) {
+      setLiked(v=>({...v,[post.id]:true})); post.likes_count=(post.likes_count||0)+1; return
+    }
+    const { data } = await supabase.auth.getUser()
+    if (!data.user) { alert('כדי לסמן לייק יש להתחבר לפרופיל'); return }
+    const { error } = await supabase.from('likes').insert({ post_id:post.id, user_id:data.user.id })
+    if (!error) { setLiked(v=>({...v,[post.id]:true})); onRefresh?.() }
+  }
+
+  return <><div className="feed">{posts.map(post=><article className="card" key={post.id}>
+    {post.media_url && post.media_type!=='video' && <img className="card-media" src={post.media_url} alt="תמונה מהשטח"/>}
+    {post.media_url && post.media_type==='video' && <video className="card-media" src={post.media_url} controls playsInline/>}
+    <div className="card-content"><div className="meta"><span className={`type-badge ${post.kind==='request'?'request-badge':''}`}>{post.kind==='request'?'❓ בקשת מידע':'● עדכון מהשטח'}</span><span>{timeAgo(post.created_at)}</span></div>
+    <p className="status-text">{post.text}</p><div className="meta"><span className="inline-meta"><MapPin size={14}/>{post.location_name}</span><span className="inline-meta"><Clock size={14}/>נשארו {expiresIn(post.expires_at)}</span></div>
+    <div className="card-footer"><span className="social-actions"><button className={`icon-btn ${liked[post.id]?'liked':''}`} onClick={()=>like(post)}><Heart size={18}/>{post.likes_count||0}</button><button className="icon-btn" onClick={()=>setCommentsPost(post.id)}><MessageCircle size={18}/>{post.comments_count||0}</button></span>
+    {post.latitude!=null&&post.longitude!=null?<a className="tiny-link" target="_blank" rel="noreferrer" href={`https://www.google.com/maps/search/?api=1&query=${post.latitude},${post.longitude}`}><Navigation size={14}/>נווט</a>:<span>מידע בזמן אמת</span>}</div></div>
+  </article>)}</div>{commentsPost&&<Comments postId={commentsPost} onClose={()=>setCommentsPost(null)} onCountChange={()=>onRefresh?.()}/>}</>
+}
