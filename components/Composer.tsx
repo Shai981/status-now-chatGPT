@@ -1,78 +1,14 @@
 'use client'
-import { useState } from 'react'
-import { LocateFixed, X } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { Camera, LocateFixed, MapPin, X } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 
-type Props={mode:'status'|'request';onClose:()=>void;onCreated:()=>void;userLocation?:{latitude:number;longitude:number}|null}
-
-export default function Composer({mode,onClose,onCreated,userLocation}:Props){
-  const [text,setText]=useState('')
-  const [locationName,setLocationName]=useState('')
-  const [expiresHours,setExpiresHours]=useState(6)
-  const [media,setMedia]=useState<File|null>(null)
-  const [loading,setLoading]=useState(false)
-  const [errorMessage,setErrorMessage]=useState('')
-  const [coords,setCoords]=useState<{latitude:number;longitude:number}|null>(userLocation||null)
-
-  function captureLocation(){
-    if(!navigator.geolocation){setErrorMessage('הדפדפן לא תומך בשיתוף מיקום');return}
-    navigator.geolocation.getCurrentPosition(
-      p=>{setCoords({latitude:p.coords.latitude,longitude:p.coords.longitude});setErrorMessage('')},
-      ()=>setErrorMessage('לא הצלחנו לקבל את המיקום. אפשר לפרסם גם בלי מיקום.'),
-      {enableHighAccuracy:true,timeout:8000}
-    )
-  }
-
-  async function submit(){
-    if(!text.trim())return
-    setLoading(true)
-    setErrorMessage('')
-    try{
-      if(!supabase){
-        const local=JSON.parse(localStorage.getItem('status-now-local')||'[]')
-        let localMediaUrl:null|string=null
-        if(media)localMediaUrl=await new Promise<string>((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(String(r.result));r.onerror=()=>reject(r.error);r.readAsDataURL(media)})
-        local.unshift({
-          id:crypto.randomUUID(),kind:mode,text:text.trim(),location_name:locationName.trim(),
-          latitude:coords?.latitude||null,longitude:coords?.longitude||null,
-          media_url:localMediaUrl,media_type:media?(media.type.startsWith('video/')?'video':'image'):null,
-          created_at:new Date().toISOString(),expires_at:new Date(Date.now()+expiresHours*3600000).toISOString(),likes_count:0,comments_count:0
-        })
-        localStorage.setItem('status-now-local',JSON.stringify(local));onCreated();onClose();return
-      }
-
-      const {data:auth}=await supabase.auth.getUser()
-      let mediaUrl:null|string=null,mediaType:null|string=null
-      if(media){
-        const ext=media.name.split('.').pop()
-        const path=`${auth.user?.id||'anon'}/${crypto.randomUUID()}.${ext}`
-        const {error:up}=await supabase.storage.from('status-media').upload(path,media)
-        if(up)throw up
-        mediaUrl=supabase.storage.from('status-media').getPublicUrl(path).data.publicUrl
-        mediaType=media.type.startsWith('video/')?'video':'image'
-      }
-
-      const {error}=await supabase.from('posts').insert({
-        user_id:auth.user?.id||null,kind:mode,text:text.trim(),location_name:locationName.trim(),
-        latitude:coords?.latitude||null,longitude:coords?.longitude||null,
-        media_url:mediaUrl,media_type:mediaType,
-        expires_at:new Date(Date.now()+expiresHours*3600000).toISOString()
-      })
-      if(error)throw error
-      onCreated();onClose()
-    }catch(error){
-      const message=error instanceof Error?error.message:'לא הצלחנו לפרסם כרגע. נסה שוב.'
-      setErrorMessage(message)
-    }finally{setLoading(false)}
-  }
-
-  return <div className="modal-backdrop" onMouseDown={onClose}><div className="sheet" onMouseDown={e=>e.stopPropagation()}>
-    <div className="sheet-header"><h2>{mode==='status'?'פרסם סטטוס':'בקש סטטוס'}</h2><button className="close-btn" onClick={onClose}><X size={18}/></button></div>
-    <div className="field"><label>{mode==='status'?'מה קורה עכשיו?':'מה אתה רוצה לדעת?'}</label><textarea autoFocus value={text} onChange={e=>setText(e.target.value)} placeholder={mode==='status'?'כתוב כאן כל מה שקורה עכשיו...':'כתוב כאן מה אתה רוצה לדעת עכשיו...'}/></div>
-    <div className="field"><label>מיקום <span className="optional-label">(אופציונלי)</span></label><input value={locationName} onChange={e=>setLocationName(e.target.value)} placeholder="אפשר להשאיר ריק"/><button type="button" className={`location-btn ${coords?'location-ok':''}`} onClick={captureLocation}><LocateFixed size={17}/>{coords?'מיקום GPS צורף':'צרף את המיקום שלי'}</button></div>
-    <div className="field"><label>תמונה או וידאו <span className="optional-label">(אופציונלי)</span></label><input type="file" accept="image/*,video/*" onChange={e=>setMedia(e.target.files?.[0]||null)}/>{media&&media.type.startsWith('image/')&&<img className="media-preview" src={URL.createObjectURL(media)} alt="preview"/>}{media&&media.type.startsWith('video/')&&<video className="media-preview" src={URL.createObjectURL(media)} controls/>}</div>
-    <div className="field"><label>כמה זמן המידע רלוונטי?</label><select value={expiresHours} onChange={e=>setExpiresHours(Number(e.target.value))}>{[1,3,6,12,24].map(h=><option key={h} value={h}>{h} שעות</option>)}</select></div>
-    {errorMessage&&<p className="form-error">{errorMessage}</p>}
-    <button className="submit" disabled={loading||!text.trim()} onClick={submit}>{loading?'מפרסם...':'פרסם עכשיו'}</button>
-  </div></div>
+type Props={mode:'status'|'request';onClose:()=>void;onCreated:()=>void;userLocation?:{latitude:number;longitude:number}|null;requestId?:string|null;groupId?:string|null}
+function guestId(){let id=localStorage.getItem('statusnow-guest-id');if(!id){id=crypto.randomUUID();localStorage.setItem('statusnow-guest-id',id)}return id}
+export default function Composer({mode,onClose,onCreated,userLocation,requestId=null,groupId=null}:Props){
+ const [text,setText]=useState('');const [locationName,setLocationName]=useState('');const [media,setMedia]=useState<File|null>(null);const [loading,setLoading]=useState(false);const [errorMessage,setErrorMessage]=useState('');const [coords,setCoords]=useState<{latitude:number;longitude:number}|null>(userLocation||null);const [name,setName]=useState('')
+ useEffect(()=>{setName(localStorage.getItem('statusnow-display-name')||'')},[])
+ function captureLocation(){if(!navigator.geolocation){setErrorMessage('הדפדפן לא תומך בשיתוף מיקום');return}navigator.geolocation.getCurrentPosition(p=>{setCoords({latitude:p.coords.latitude,longitude:p.coords.longitude});setErrorMessage('')},()=>setErrorMessage('לא הצלחנו לקבל את המיקום. אפשר לפרסם גם בלי מיקום.'),{enableHighAccuracy:true,timeout:8000})}
+ async function submit(){if(!text.trim()||!supabase)return;setLoading(true);setErrorMessage('');try{const gid=guestId();if(name.trim())localStorage.setItem('statusnow-display-name',name.trim());const {data:auth}=await supabase.auth.getUser();let mediaUrl:null|string=null,mediaType:null|string=null;if(media){const ext=media.name.split('.').pop();const path=`${auth.user?.id||gid}/${crypto.randomUUID()}.${ext}`;const {error:up}=await supabase.storage.from('status-media').upload(path,media);if(up)throw up;mediaUrl=supabase.storage.from('status-media').getPublicUrl(path).data.publicUrl;mediaType=media.type.startsWith('video/')?'video':'image'}const expires=new Date(Date.now()+(groupId?24:2)*3600000).toISOString();if(mode==='request'&&!requestId){const {error}=await supabase.from('status_requests').insert({user_id:auth.user?.id||null,question:text.trim(),location_name:locationName.trim()||null,latitude:coords?.latitude||null,longitude:coords?.longitude||null,display_name:name.trim()||'אורח',guest_identifier:auth.user?null:gid,expires_at:expires});if(error)throw error}else{const {error}=await supabase.from('posts').insert({user_id:auth.user?.id||null,kind:'status',text:text.trim(),location_name:locationName.trim()||null,latitude:coords?.latitude||null,longitude:coords?.longitude||null,media_url:mediaUrl,media_type:mediaType,display_name:name.trim()||'אורח',guest_identifier:auth.user?null:gid,request_id:requestId,group_id:groupId,expires_at:expires});if(error)throw error}onCreated();onClose()}catch(error){setErrorMessage(error instanceof Error?error.message:'לא הצלחנו לפרסם כרגע. נסה שוב.')}finally{setLoading(false)}}
+ const isRequest=mode==='request'&&!requestId;return <div className="modal-backdrop" onMouseDown={onClose}><div className="sheet" onMouseDown={e=>e.stopPropagation()}><div className="sheet-header"><div><h2>{requestId?'ענה לבקשה':isRequest?'בקש עדכון':'מה קורה עכשיו?'}</h2><p className="helper">{isRequest?'שאל אנשים שנמצאים שם עכשיו':'שתף מידע טרי. רק הטקסט חובה.'}</p></div><button className="close-btn" onClick={onClose}><X size={18}/></button></div><div className="field"><textarea autoFocus value={text} onChange={e=>setText(e.target.value)} placeholder={isRequest?'מה אתה רוצה לדעת עכשיו?':'מה קורה עכשיו?'} /></div><div className="field"><label>השם שיוצג <span className="optional-label">(אופציונלי)</span></label><input value={name} onChange={e=>setName(e.target.value)} placeholder="אורח"/></div><div className="composer-options"><label className="option-button"><MapPin size={17}/><input value={locationName} onChange={e=>setLocationName(e.target.value)} placeholder="הוסף מקום"/></label><button type="button" className={`option-button ${coords?'location-ok':''}`} onClick={captureLocation}><LocateFixed size={17}/>{coords?'GPS צורף':'המיקום שלי'}</button><label className="option-button"><Camera size={17}/>מדיה<input className="hidden-file" type="file" accept="image/*,video/*" onChange={e=>setMedia(e.target.files?.[0]||null)}/></label></div>{media&&<p className="helper">נבחר: {media.name}</p>}<p className="expiry-note">⏱ {groupId?'הפרסום ייעלם אוטומטית אחרי 24 שעות':'המידע ייעלם אוטומטית אחרי שעתיים'}</p>{errorMessage&&<p className="form-error">{errorMessage}</p>}<button className="submit" disabled={loading||!text.trim()} onClick={submit}>{loading?'מפרסם...':requestId?'שלח תשובה':isRequest?'פרסם בקשה':'פרסם עכשיו'}</button></div></div>
 }
